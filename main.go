@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"log"
-	handler "mongomini/api"
+	"mongomini/endpoints"
 	"net"
 	"net/http"
 )
@@ -14,9 +14,9 @@ func main() {
 
 	FullMux := http.NewServeMux()
 
-	FullMux.HandleFunc("/", handler.ServeRequest)
+	FullMux.HandleFunc("/", endpoints.ServeRequest)
 
-	handler.InitAll()
+	endpoints.InitAll()
 
 	println("API running on http://localhost:" + HTTPPort)
 

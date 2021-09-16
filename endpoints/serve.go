@@ -1,4 +1,4 @@
-package handler
+package endpoints
 
 import (
 	"fmt"
@@ -9,20 +9,26 @@ import (
 	"strings"
 )
 
-var API_POSTs map[string]API_POST_Recieved = map[string]API_POST_Recieved{"api/auth": api_POST_Auth}
+var API_POSTs map[string]API_POST_Recieved = map[string]API_POST_Recieved{"api/auth/": api_POST_Auth}
 
-var API_GETs map[string]API_GET_Recieved = map[string]API_GET_Recieved{"api/auth": api_GET_Auth}
+var API_GETs map[string]API_GET_Recieved = map[string]API_GET_Recieved{
+	"api/auth/":  api_GET_Auth,
+	"api/hello/": api_GET_Hello,
+}
 
 func ServeRequest(w http.ResponseWriter, r *http.Request) {
 
 	urlpath := strings.TrimPrefix(r.URL.Path, "/")
+	if !strings.HasSuffix(urlpath, "/") {
+		urlpath += "/"
+	}
 
 	switch r.Method {
 	case "GET":
 
 		for apiPath, rapi := range API_GETs {
 			if strings.HasPrefix(urlpath, apiPath) {
-				resp := rapi(strings.TrimPrefix(urlpath, apiPath+"/"))
+				resp := rapi(strings.TrimPrefix(urlpath, apiPath))
 				if resp.Headers != nil {
 					for k, v := range resp.Headers {
 						w.Header().Set(k, v)
