@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -91,4 +92,8 @@ func InitMongoDB() {
 
 	MongoClient = client
 
+}
+
+func InitsCredsHandler(w http.ResponseWriter, r *http.Request) {
+	ServeRequest(w, r)
 }
