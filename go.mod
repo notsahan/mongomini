@@ -1,7 +1,3 @@
-module github.com/notsahan/mongomini
+module mongomini
 
 go 1.17
-
-require github.com/notsahan/mongomini/api v1
-
-replace github.com/notsahan/mongomini/api v1 => ./api
