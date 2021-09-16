@@ -2,7 +2,11 @@
     "routes": [
       {
         "src": "/api/hello",
-        "dest": "api/date.go"
+        "dest": "api/handle.go"
+      },
+      {
+        "src": "/mini/.*",
+        "dest": "api/handle.go"
       }
     ]
   }
