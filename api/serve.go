@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-var API_POSTs map[string]API_POST_Recieved = map[string]API_POST_Recieved{"api/auth": API_POST_Auth}
+var API_POSTs map[string]API_POST_Recieved = map[string]API_POST_Recieved{"api/auth": api_POST_Auth}
 
-var API_GETs map[string]API_GET_Recieved = map[string]API_GET_Recieved{"api/auth": API_GET_Auth}
+var API_GETs map[string]API_GET_Recieved = map[string]API_GET_Recieved{"api/auth": api_GET_Auth}
 
 func ServeRequest(w http.ResponseWriter, r *http.Request) {
 
@@ -34,6 +34,8 @@ func ServeRequest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+
+		w.Write([]byte("Path " + urlpath + " not found"))
 
 		// // If no API
 		// fmt.Println("Serving " + urlpath)
@@ -62,9 +64,11 @@ func ServeRequest(w http.ResponseWriter, r *http.Request) {
 				if len(resp.Body) > 0 {
 					w.Write(resp.Body)
 				}
-
+				return
 			}
 		}
+
+		w.Write([]byte("Path " + urlpath + " not found"))
 
 	default:
 		fmt.Fprintf(w, "Sorry, only GET and POST methods are supported.")
