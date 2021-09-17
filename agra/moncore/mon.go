@@ -18,7 +18,12 @@ type Moncore struct {
 }
 
 func DefaultContext() context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), DefaultContextTimout)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultContextTimout)
+	go func() {
+		time.Sleep(DefaultContextTimout * 2)
+		cancel()
+	}()
+
 	return ctx
 }
 
@@ -35,7 +40,7 @@ func InitMongo(url string) (*Moncore, error) {
 
 	ping_err := client.Ping(DefaultContext(), nil)
 	if ping_err != nil {
-		return nil, err
+		return nil, ping_err
 	}
 
 	Print("MongoDB client connected")
