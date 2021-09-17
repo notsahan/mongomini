@@ -6,5 +6,6 @@ import (
 )
 
 func AllHandler(w http.ResponseWriter, r *http.Request) {
+	endpoints.InitAll()
 	endpoints.ServeRequest(w, r)
 }

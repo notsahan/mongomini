@@ -16,22 +16,6 @@ var (
 	MongoClient *mongo.Client
 )
 
-type API_POST_Recieved func(string, []byte) Response
-type API_GET_Recieved func(string) Response
-
-type Response struct {
-	Body    []byte
-	Headers map[string]string
-}
-
-func BodyResponse(body []byte) Response {
-	return Response{body, map[string]string{}}
-}
-
-func StringResponse(body string) Response {
-	return Response{[]byte(body), map[string]string{}}
-}
-
 func InitAll() {
 
 	for initing {
@@ -44,16 +28,18 @@ func InitAll() {
 
 	initing = true
 
-	InitEnvArgs()
+	_InitEnvArgs()
 
-	InitMongoDB()
+	// _InitMongoDB()
+
+	_InitEndpoints()
 
 	Inited = true
 	initing = false
 }
 
 // Initialize from the environment variables
-func InitEnvArgs() {
+func _InitEnvArgs() {
 	if envarg := os.Getenv("Mongo_proto"); len(envarg) != 0 {
 		Mongo_proto = envarg
 	}
@@ -76,7 +62,7 @@ func InitEnvArgs() {
 }
 
 // Initialize the mongo client
-func InitMongoDB() {
+func _InitMongoDB() {
 	// "minivercel:<password>@minicluster.hybfy.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
 
 	clientOptions := options.Client().
@@ -91,4 +77,14 @@ func InitMongoDB() {
 
 	MongoClient = client
 
+}
+
+func _InitEndpoints() {
+
+	API_Endpoints = append(API_Endpoints,
+		API_Call_Handler_Prefix(`api/auth/`, API_Auth),
+		API_Call_Handler_Prefix(`api/hello/`, API_Hello),
+		API_Call_Handler_Exact(`mini/hello/([^/]+)/([^/]+)/`, API_Hello),
+		API_Call_Handler_Prefix(`mini/hello/(.*)`, API_Hello),
+	)
 }
