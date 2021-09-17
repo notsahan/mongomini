@@ -90,7 +90,7 @@ func (c *APICall) Body() []byte {
 
 	body, err := ioutil.ReadAll(c.HTTPRequest.Body)
 	if err != nil {
-		println("Error reading body: " + err.Error())
+		PrintErrorMsg("Error reading body: ", err)
 		http.Error(*c.HTTPWriter, "can't read body", http.StatusBadRequest)
 		return nil
 	}
@@ -106,7 +106,7 @@ func (c *APICall) BodyToString() string {
 // Deserializing request body to struct type
 func (c *APICall) BodyJsonToStruct(Type interface{}) {
 	if err := json.Unmarshal(c.Body(), Type); err != nil {
-		println("Error unmarshaling body: " + err.Error())
+		PrintErrorMsg("Error unmarshaling body: ", err)
 		c.WriteError("Error deserializing body", err, http.StatusUnprocessableEntity)
 	}
 }
@@ -125,7 +125,7 @@ func (c *APICall) WriteString(S string) {
 func (c *APICall) WriteJSON(Obj interface{}) {
 	J, JErr := json.Marshal(Obj)
 	if JErr != nil {
-		println("Error marshalling JSON: " + JErr.Error())
+		PrintErrorMsg("Error marshalling JSON: ", JErr)
 		c.WriteError("Error Writing to JSON ", JErr, http.StatusUnprocessableEntity)
 		return
 	}
@@ -150,7 +150,7 @@ func (c *APICall) SetHeader(key string, value string) {
 
 // Write error to response
 func (c *APICall) WriteError(PrefixMsg string, Err error, HttpStatusCode int) {
-	println("WriteError: " + Err.Error())
+	PrintErrorMsg("WriteError: ", Err)
 	http.Error(*c.HTTPWriter, PrefixMsg+Err.Error(), HttpStatusCode)
 }
 

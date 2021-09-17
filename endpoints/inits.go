@@ -1,21 +1,21 @@
 package endpoints
 
 import (
-	"context"
-	"log"
 	"os"
+	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"mongomini/agra/moncore"
 )
 
 var (
-	Inited      bool = false
-	initing     bool = false
-	MongoClient *mongo.Client
+	Inited  bool = false
+	initing bool = false
+
+	Moncore *moncore.Moncore
 )
 
+// Initialize All
 func InitAll() {
 
 	for initing {
@@ -30,12 +30,15 @@ func InitAll() {
 
 	_InitEnvArgs()
 
-	// _InitMongoDB()
+	_InitMongoDB()
 
 	_InitEndpoints()
 
 	Inited = true
 	initing = false
+
+	Print("Collection names : " + strings.Join(Moncore.Database("users").ListCollection(), ", "))
+
 }
 
 // Initialize from the environment variables
@@ -63,22 +66,18 @@ func _InitEnvArgs() {
 
 // Initialize the mongo client
 func _InitMongoDB() {
-	// "minivercel:<password>@minicluster.hybfy.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
 
-	clientOptions := options.Client().
-		ApplyURI(Mongo_proto + Mongo_user + ":" + Mongo_pass + "@" + Mongo_host)
+	MC, err := moncore.InitMongo(Mongo_proto + Mongo_user + ":" + Mongo_pass + "@" + Mongo_host)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	MongoClient = client
+	Moncore = MC
 
 }
 
+// Initialize the endpoints
 func _InitEndpoints() {
 
 	API_Endpoints = append(API_Endpoints,

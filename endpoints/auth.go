@@ -6,4 +6,6 @@ package endpoints
 
 func API_Auth(C *APICall) {
 	C.WriteString("API GET recieved. Path : " + C.Path)
+
+
 }
