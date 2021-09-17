@@ -13,3 +13,10 @@ func API_Hello(C *APICall) {
 		C.WriteString("<br> \n <h2> Let's go, Captain " + C.Params[0] + " " + C.Params[1] + "! </h2> \n <br>")
 	}
 }
+
+func API_List_Collections(C *APICall) {
+
+	if len(C.Params) == 1 {
+		C.WriteString("Collection names : " + strings.Join(Moncore.Database(C.Params[0]).ListCollection(), ", "))
+	}
+}

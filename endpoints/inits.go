@@ -2,7 +2,6 @@ package endpoints
 
 import (
 	"os"
-	"strings"
 	"time"
 
 	"mongomini/agra/moncore"
@@ -37,7 +36,7 @@ func InitAll() {
 	Inited = true
 	initing = false
 
-	Print("Collection names : " + strings.Join(Moncore.Database("users").ListCollection(), ", "))
+	// Print("Collection names : " + strings.Join(Moncore.Database("users").ListCollection(), ", "))
 
 }
 
@@ -85,5 +84,6 @@ func _InitEndpoints() {
 		API_Call_Handler_Prefix(`api/hello/`, API_Hello),
 		API_Call_Handler_Exact(`mini/hello/([^/]+)/([^/]+)/`, API_Hello),
 		API_Call_Handler_Prefix(`mini/hello/(.*)`, API_Hello),
+		API_Call_Handler_Exact(`mini/ls/([^/]+)/`, API_List_Collections),
 	)
 }
