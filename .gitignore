@@ -1,3 +1,4 @@
 
 endpoints/creds.go
 run
+.vscode/envcreds

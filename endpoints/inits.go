@@ -84,6 +84,9 @@ func _InitEndpoints() {
 		API_Call_Handler_Prefix(`api/hello/`, API_Hello),
 		API_Call_Handler_Exact(`mini/hello/([^/]+)/([^/]+)/`, API_Hello),
 		API_Call_Handler_Prefix(`mini/hello/(.*)`, API_Hello),
-		API_Call_Handler_Exact(`mini/ls/([^/]+)/`, API_List_Collections),
+		API_Call_Handler_Exact(`mini/ls/([^/]+)/`, API_List_Collections),                              // GET : mini/ls/<db>
+		API_Call_Handler_Exact(`mini/ls/([^/]+)/([^/]+)/`, API_List_Documents),                        // GET : mini/ls/<db>/<collection>
+		API_Call_Handler_Exact(`mini/set/([^/]+)/([^/]+)/([^/]+)/`, API_Set_Document),                 // POST : mini/set/<db>/<collection>/<dockey>
+		API_Call_Handler_Exact(`mini/set/([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+)/`, API_Set_Document), // GET : mini/set/<db</<collection>/<dockey>/<key>/<value>
 	)
 }

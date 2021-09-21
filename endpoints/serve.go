@@ -121,9 +121,33 @@ func (c *APICall) WriteString(S string) {
 	c.Write([]byte(S))
 }
 
+// Set HTML Content-Type header to response and write <html> tag to response
+func (c *APICall) HTMLBegin() {
+	c.SetHeader("Content-Type", "text/html; charset=utf-8")
+	c.WriteString("<!DOCTYPE html>")
+	c.WriteString("<html>")
+}
+
+// Write </html> tags to response
+func (c *APICall) HTMLEnd() {
+	c.WriteString("</html>")
+}
+
 // Write Object to response as JSON
 func (c *APICall) WriteJSON(Obj interface{}) {
 	J, JErr := json.Marshal(Obj)
+	if JErr != nil {
+		PrintErrorMsg("Error marshalling JSON: ", JErr)
+		c.WriteError("Error Writing to JSON ", JErr, http.StatusUnprocessableEntity)
+		return
+	}
+
+	c.Write(J)
+}
+
+// Write Object to response as JSON indented
+func (c *APICall) WriteJSONBeautified(Obj interface{}) {
+	J, JErr := json.MarshalIndent(Obj, "", "  ")
 	if JErr != nil {
 		PrintErrorMsg("Error marshalling JSON: ", JErr)
 		c.WriteError("Error Writing to JSON ", JErr, http.StatusUnprocessableEntity)
