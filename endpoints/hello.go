@@ -3,7 +3,6 @@ package endpoints
 import (
 	"errors"
 	"mongomini/agra/moncore"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -27,29 +26,61 @@ func API_Hello(C *APICall) {
 
 func API_List_Collections(C *APICall) {
 
-	C.HTMLBegin()
-
 	if len(C.Params) == 1 {
-		C.WriteString("Collection names : " + strings.Join(Moncore.Database(C.Params[0]).ListCollectionNames(), ", "))
-
-		var cols = Moncore.Database(C.Params[0]).ListCollections()
-
-		C.WriteString(" <br> <br> Collection count : " + strconv.Itoa(len(cols)) + " <br> ")
+		C.WriteJSONBeautified(Moncore.Database(C.Params[0]).ListCollectionNames())
 
 	} else {
 		C.WriteError("Bad Request", errors.New("endpoints : mini/ls/<db>"), 400)
 		return
 	}
 
-	C.HTMLEnd()
-
 }
 
 func API_List_Documents(C *APICall) {
 
+	F := moncore.Filter_MatchAll()
+
+	Q := C.HTTPRequest.URL.Query()
+
+	C.WriteJSONBeautified(Q)
+
+	for qk, qvs := range Q {
+		if len(qk) == 0 {
+			continue
+		}
+
+		if len(qvs) == 0 { // Exist
+			F.Exists(qk, true)
+
+		} else if len(qvs) == 1 {
+			v := qvs[0]
+			if strings.HasPrefix(v, "=") {
+				F.Equals(qk, v[1:])
+
+			} else if v == "exist" {
+				F.Exists(qk, true)
+
+			} else if v == "not-exist" {
+				F.Exists(qk, true)
+
+			} else if len(v) == 0 {
+				F.Exists(qk, true)
+			}
+
+		} else {
+			// for _, v := range qvs {
+
+			// }
+
+		}
+
+	}
+
+	C.WriteString("\n\n")
+
 	if len(C.Params) == 2 {
-		Docs := Moncore.Database(C.Params[0]).Collection(C.Params[1]).Query(moncore.Filter_MatchAll{})
-		C.WriteJSON(Docs)
+		Docs := Moncore.Database(C.Params[0]).Collection(C.Params[1]).Query(F)
+		C.WriteJSONBeautified(Docs)
 
 	} else {
 		C.WriteError("Bad Request", errors.New("endpoint : mini/ls/<db>/<collection>"), 400)
@@ -59,8 +90,6 @@ func API_List_Documents(C *APICall) {
 }
 
 func API_Set_Document(C *APICall) {
-
-	C.HTMLBegin()
 
 	var doc interface{}
 
@@ -88,17 +117,6 @@ func API_Set_Document(C *APICall) {
 
 	NewDocKey := Col.Set(C.Params[2], doc)
 
-	C.WriteString("<pre>")
-
-	if len(NewDocKey) == 0 {
-		C.WriteString("Updated document")
-	} else {
-		C.WriteString("Inserted new : " + NewDocKey)
-
-	}
-
-	C.WriteString("</pre>")
-
-	C.HTMLEnd()
+	C.WriteJSONBeautified(NewDocKey)
 
 }

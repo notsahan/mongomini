@@ -3,7 +3,7 @@ package moncore
 import (
 	"context"
 	"encoding/json"
-	"strings"
+	"net/http"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,6 +21,12 @@ type Moncore struct {
 
 func DefaultContext() (*context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultContextTimout)
+
+	return &ctx, cancel
+}
+
+func LongRunningContext() (*context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
 
 	return &ctx, cancel
 }
@@ -104,42 +110,79 @@ type Collection struct {
 }
 
 // TODO : filters
-func (C *Collection) Query(filter interface{}) map[string]GenericDocument {
+func (C *Collection) query_curser(filter *Filter) *mongo.Cursor {
 
 	ctx_dbr, cnc_dbr := DefaultContext()
 	defer cnc_dbr()
 
-	qcur, qerr := C.MC.Find(*ctx_dbr, filter)
+	qcur, qerr := C.MC.Find(*ctx_dbr, filter.MongoQuery)
 
 	if CheckError(qerr) {
 		return nil
 	}
 
-	out := map[string]GenericDocument{}
+	return qcur
+}
 
-	ctx_dbr, cnc_dbr = DefaultContext()
+func (C *Collection) Query(filter *Filter) []GenericDBDocument {
+
+	qcur := C.query_curser(filter)
+
+	if qcur == nil {
+		return nil
+	}
+
+	out := []GenericDBDocument{}
+
+	ctx_dbr, cnc_dbr := DefaultContext()
 	defer cnc_dbr()
 
-	for qcur.Next(*ctx_dbr) {
+	cerr := qcur.All(*ctx_dbr, &out)
 
-		// d := DBDocument_new(OutputDocTemplate)
-		d := GenericDocument{}
-		derr := qcur.Decode(&d)
-
-		if !CheckError(derr) {
-			out[d.ID] = d
-		}
-
-		ctx_dbr, cnc_dbr = DefaultContext()
-		defer cnc_dbr()
+	if CheckError(cerr) {
+		return nil
 	}
 
 	return out
 
 }
 
+// bufferSize: 0 means unbuffered. This will load all documents at once.
+func (C *Collection) QueryToChannel(filter *Filter, bufferSize int) (chan *GenericDBDocument, context.CancelFunc) {
+
+	qcur := C.query_curser(filter)
+
+	if qcur == nil {
+		return nil, nil
+	}
+
+	out := make(chan *GenericDBDocument, bufferSize)
+	ctx_dbr, cnc_dbr := LongRunningContext()
+
+	go func() {
+
+		for qcur.Next(*ctx_dbr) {
+
+			d := GenericDBDocument{}
+			derr := qcur.Decode(&d)
+
+			if !CheckError(derr) {
+				out <- &d
+			}
+
+		}
+
+		close(out)
+
+		defer cnc_dbr()
+	}()
+
+	return out, cnc_dbr
+
+}
+
 // Returns Inserted ID or "" if updated already existing document
-func (C *Collection) SetDocument(Doc *DBDocument) string {
+func (C *Collection) SetDocument(Doc *DBDocument) WriteOperationResponse {
 	ctx_dbr, cnc_dbr := DefaultContext()
 	defer cnc_dbr()
 
@@ -147,33 +190,40 @@ func (C *Collection) SetDocument(Doc *DBDocument) string {
 	res, rerr := C.MC.UpdateByID(*ctx_dbr, Doc.ID, bson.M{"$set": Doc}, &options.UpdateOptions{Upsert: &truebool})
 
 	if CheckError(rerr) {
-		return ""
+		return WriteOperationResponse{
+			Status: 2,
+			Action: "dbreq",
+			Result: rerr.Error(),
+		}
 	}
 
-	return castInterfaceToString(res.UpsertedID)
+	if res.UpsertedID == nil {
+		return WriteOperationResponse{
+			Status: 1,
+			Action: "update",
+			Result: Doc.ID,
+		}
+	}
+
+	str, strOK := res.UpsertedID.(string)
+	if !strOK {
+		return WriteOperationResponse{
+			Status: http.StatusInternalServerError,
+			Action: "typecast",
+			Result: "UpsertedID is not a string",
+		}
+	}
+
+	return WriteOperationResponse{
+		Status: 1,
+		Action: "insert",
+		Result: str,
+	}
 }
 
 // Returns Inserted ID or nil if updated already existing document
-func (C *Collection) Set(key string, val interface{}) string {
+func (C *Collection) Set(key string, val interface{}) WriteOperationResponse {
 	return C.SetDocument(&DBDocument{ID: key, Doc: val})
-}
-
-func castInterfaceToString(i interface{}) string {
-	jb, je := json.Marshal(i)
-
-	if CheckError(je) {
-		return ""
-	}
-	oid := string(jb)
-
-	oid = strings.TrimPrefix(oid, `"`)
-	oid = strings.TrimSuffix(oid, `"`)
-
-	if oid == "null" {
-		return ""
-	}
-
-	return oid
 }
 
 // Document structure to be stored in MongoDB
@@ -182,14 +232,89 @@ type DBDocument struct {
 	Doc interface{} `bson:"Doc"`
 }
 
-// Generic Document structure to be decoded into any type. Doc is a map[string]interface{}
-type GenericDocument struct {
-	ID  string                 `bson:"_id"`
-	Doc map[string]interface{} `bson:"Doc"`
-}
-
-type Filter_MatchAll bson.M
-
 func DBDocument_new(Doc interface{}) DBDocument {
 	return DBDocument{Doc: Doc}
+}
+
+// Generic Document structure to be decoded into any type.
+type GenericDBDocument struct {
+	ID  string          `bson:"_id"`
+	Doc GenericDocument `bson:"Doc"`
+}
+
+// Generic Document to be decoded or encoded into any type. Equalent to map[string]interface{}
+type GenericDocument bson.M
+
+type WriteOperationResponse struct {
+	Status int    // 0 = unknown, 1 = success, 2 = failure (Unknown error), others : HTTP status codes (But not used for the HTTP response)
+	Action string // Performed action | "insert" | "update" | "dbreq" | "typecast"
+	Result string // Targeted ID or error message
+}
+
+func (D *GenericDocument) Cast(Template interface{}) interface{} {
+	bb, be := bson.Marshal(D)
+
+	if CheckError(be) {
+		return nil
+	}
+
+	var out interface{}
+
+	err := bson.Unmarshal(bb, &out)
+
+	if CheckError(err) {
+		return nil
+	}
+
+	return out
+}
+
+func ToJson(Obj *interface{}) string {
+	jb, je := json.Marshal(*Obj)
+
+	if CheckError(je) {
+		return ""
+	}
+	return string(jb)
+}
+func ToJsonPretty(Obj *interface{}) string {
+	jb, je := json.MarshalIndent(*Obj, "", "    ")
+
+	if CheckError(je) {
+		return ""
+	}
+	return string(jb)
+}
+
+type Filter struct {
+	MongoQuery bson.D
+}
+
+func Filter_MatchAll() *Filter {
+	return &Filter{MongoQuery: bson.D{}}
+}
+
+func (F *Filter) Equals(filedPath string, value interface{}) *Filter {
+	F.MongoQuery = append(F.MongoQuery, bson.E{
+		Key:   "Doc." + filedPath,
+		Value: value,
+	})
+	return F
+}
+
+func (F *Filter) Exists(filedPath string, exists bool) *Filter {
+
+	var value bson.M
+
+	if exists {
+		value = bson.M{"$exists": true}
+	} else {
+		value = bson.M{"$exists": false}
+	}
+
+	F.MongoQuery = append(F.MongoQuery, bson.E{
+		Key:   "Doc." + filedPath,
+		Value: value,
+	})
+	return F
 }
