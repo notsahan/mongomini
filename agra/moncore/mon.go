@@ -15,16 +15,19 @@ var (
 	DefaultContextTimout time.Duration = 10 * time.Second
 )
 
+// MongoDB - Agra Adapter : MonCore
 type Moncore struct {
 	client *mongo.Client
 }
 
+// Default Context with timeout
 func DefaultContext() (*context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultContextTimout)
 
 	return &ctx, cancel
 }
 
+// Default Long running Context without timeout but with cancel
 func LongRunningContext() (*context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -55,6 +58,7 @@ func InitMongo(url string) (*Moncore, error) {
 	return &Moncore{client: client}, nil
 }
 
+// Disconnect from MongoDB
 func (MC *Moncore) Disconnect() error {
 
 	ctx_dbr, cnc_dbr := DefaultContext()
@@ -63,19 +67,23 @@ func (MC *Moncore) Disconnect() error {
 	return MC.client.Disconnect(*ctx_dbr)
 }
 
+// Specify Database to use
 func (MC *Moncore) Database(name string) *Database {
 	db := MC.client.Database(name)
 	return &Database{db: db}
 }
 
+// MongoDB Database wrapper
 type Database struct {
 	db *mongo.Database
 }
 
+// Specify Collection to use
 func (MD *Database) Collection(name string) *Collection {
 	return &Collection{MC: MD.db.Collection(name)}
 }
 
+// List all collection names in database
 func (MD *Database) ListCollectionNames() []string {
 
 	ctx_dbr, cnc_dbr := DefaultContext()
@@ -89,6 +97,7 @@ func (MD *Database) ListCollectionNames() []string {
 	return names
 }
 
+// List all collections in database
 func (MD *Database) ListCollections() map[string]*Collection {
 	colnames := MD.ListCollectionNames()
 
@@ -105,11 +114,11 @@ func (MD *Database) ListCollections() map[string]*Collection {
 	return cols
 }
 
+// MongoDB Collection wrapper
 type Collection struct {
 	MC *mongo.Collection
 }
 
-// TODO : filters
 func (C *Collection) query_curser(filter *Filter) *mongo.Cursor {
 
 	ctx_dbr, cnc_dbr := DefaultContext()
@@ -124,6 +133,9 @@ func (C *Collection) query_curser(filter *Filter) *mongo.Cursor {
 	return qcur
 }
 
+// Query collection with filter.
+// You can use Filter_MatchAll() to match all documents and add filters to filter out documents.
+// Returns nil if error.
 func (C *Collection) Query(filter *Filter) []GenericDBDocument {
 
 	qcur := C.query_curser(filter)
@@ -147,7 +159,13 @@ func (C *Collection) Query(filter *Filter) []GenericDBDocument {
 
 }
 
-// bufferSize: 0 means unbuffered. This will load all documents at once.
+// Query collection with filter.
+// You can use Filter_MatchAll() to match all documents and add filters to filter out documents.
+//
+// bufferSize: 0 means unbuffered, which will load all documents at once to memory.
+//
+// Returns a channel that will be closed when all documents are read.
+// Returns nil if error.
 func (C *Collection) QueryToChannel(filter *Filter, bufferSize int) (chan *GenericDBDocument, context.CancelFunc) {
 
 	qcur := C.query_curser(filter)
@@ -181,6 +199,7 @@ func (C *Collection) QueryToChannel(filter *Filter, bufferSize int) (chan *Gener
 
 }
 
+// Insert or Update document.
 // Returns Inserted ID or "" if updated already existing document
 func (C *Collection) SetDocument(Doc *DBDocument) WriteOperationResponse {
 	ctx_dbr, cnc_dbr := DefaultContext()
@@ -232,10 +251,6 @@ type DBDocument struct {
 	Doc interface{} `bson:"Doc"`
 }
 
-func DBDocument_new(Doc interface{}) DBDocument {
-	return DBDocument{Doc: Doc}
-}
-
 // Generic Document structure to be decoded into any type.
 type GenericDBDocument struct {
 	ID  string          `bson:"_id"`
@@ -245,12 +260,14 @@ type GenericDBDocument struct {
 // Generic Document to be decoded or encoded into any type. Equalent to map[string]interface{}
 type GenericDocument bson.M
 
+// WriteOperationResponse is returned by Write operations.
 type WriteOperationResponse struct {
 	Status int    // 0 = unknown, 1 = success, 2 = failure (Unknown error), others : HTTP status codes (But not used for the HTTP response)
 	Action string // Performed action | "insert" | "update" | "dbreq" | "typecast"
 	Result string // Targeted ID or error message
 }
 
+// Cast a GenericDocument into Template type
 func (D *GenericDocument) Cast(Template interface{}) interface{} {
 	bb, be := bson.Marshal(D)
 
@@ -269,6 +286,7 @@ func (D *GenericDocument) Cast(Template interface{}) interface{} {
 	return out
 }
 
+// Serialize object into JSON
 func ToJson(Obj *interface{}) string {
 	jb, je := json.Marshal(*Obj)
 
@@ -277,6 +295,8 @@ func ToJson(Obj *interface{}) string {
 	}
 	return string(jb)
 }
+
+// Serialize object into JSON prettified (indented)
 func ToJsonPretty(Obj *interface{}) string {
 	jb, je := json.MarshalIndent(*Obj, "", "    ")
 
@@ -286,35 +306,69 @@ func ToJsonPretty(Obj *interface{}) string {
 	return string(jb)
 }
 
+// Filter structure to be used with Query() . This contains the matching criteria and the filed
 type Filter struct {
 	MongoQuery bson.D
 }
 
+// Filterlet contains only the matching criteria. This is used to create a Filter
+type Filterlet struct {
+	Querylet bson.D
+}
+
+// Empty filter that matches all
 func Filter_MatchAll() *Filter {
 	return &Filter{MongoQuery: bson.D{}}
 }
 
-func (F *Filter) Equals(filedPath string, value interface{}) *Filter {
-	F.MongoQuery = append(F.MongoQuery, bson.E{
-		Key:   "Doc." + filedPath,
+// Empty filter that matches all
+func Filterlet_new() *Filterlet {
+	return &Filterlet{Querylet: bson.D{}}
+}
+
+// Create a filterlet that matches if field is equal.
+//
+// The returned Filterlet and input Filterlet are the same.
+func (F *Filterlet) Equals(value interface{}) *Filterlet {
+	F.Querylet = append(F.Querylet, bson.E{
+		Key:   "$eq",
 		Value: value,
 	})
+
 	return F
 }
 
-func (F *Filter) Exists(filedPath string, exists bool) *Filter {
+// Create a filterlet that matches if field is not equal.
+//
+// The returned Filterlet and input Filterlet are the same.
+func (F *Filterlet) NotEquals(value interface{}) *Filterlet {
+	F.Querylet = append(F.Querylet, bson.E{
+		Key:   "$ne",
+		Value: value,
+	})
 
-	var value bson.M
+	return F
+}
 
-	if exists {
-		value = bson.M{"$exists": true}
-	} else {
-		value = bson.M{"$exists": false}
-	}
+// Create a filterlet that matches if field is present or absant according to 'exists' parameter.
+//
+// The returned Filterlet and input Filterlet are the same.
+func (F *Filterlet) Exists(exists bool) *Filterlet {
+
+	F.Querylet = append(F.Querylet, bson.E{
+		Key:   "$exists",
+		Value: exists,
+	})
+
+	return F
+}
+
+// Add filterlet to filter. The returned filter and input filter are the same.
+func (F *Filter) Add(filedPath string, fl *Filterlet) *Filter {
 
 	F.MongoQuery = append(F.MongoQuery, bson.E{
 		Key:   "Doc." + filedPath,
-		Value: value,
+		Value: bson.D(fl.Querylet),
 	})
 	return F
 }

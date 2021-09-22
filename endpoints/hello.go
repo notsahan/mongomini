@@ -49,29 +49,31 @@ func API_List_Documents(C *APICall) {
 			continue
 		}
 
+		fl := moncore.Filterlet_new()
 		if len(qvs) == 0 { // Exist
-			F.Exists(qk, true)
-
-		} else if len(qvs) == 1 {
-			v := qvs[0]
-			if strings.HasPrefix(v, "=") {
-				F.Equals(qk, v[1:])
-
-			} else if v == "exist" {
-				F.Exists(qk, true)
-
-			} else if v == "not-exist" {
-				F.Exists(qk, true)
-
-			} else if len(v) == 0 {
-				F.Exists(qk, true)
-			}
+			fl.Exists(true)
 
 		} else {
-			// for _, v := range qvs {
+			for _, v := range qvs {
+				if strings.HasPrefix(v, "=") {
+					fl.Equals(v[1:])
 
-			// }
+				} else if strings.HasPrefix(v, "-") {
+					fl.NotEquals(v[1:])
 
+				} else if v == "exist" || len(v) == 0 {
+					fl.Exists(true)
+
+				} else if v == "not-exist" {
+					fl.Exists(false)
+
+				}
+
+			}
+		}
+
+		if len(fl.Querylet) != 0 {
+			F.Add(qk, fl)
 		}
 
 	}
