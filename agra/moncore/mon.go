@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -350,6 +351,18 @@ func (F *Filterlet) NotEquals(value interface{}) *Filterlet {
 	return F
 }
 
+// Create a filterlet that matches regex expression.
+//
+// The returned Filterlet and input Filterlet are the same.
+func (F *Filterlet) RegexMatches(value string) *Filterlet {
+	F.Querylet = append(F.Querylet, bson.E{
+		Key:   "$regex",
+		Value: value,
+	})
+
+	return F
+}
+
 // Create a filterlet that matches if field is present or absant according to 'exists' parameter.
 //
 // The returned Filterlet and input Filterlet are the same.
@@ -363,6 +376,19 @@ func (F *Filterlet) Exists(exists bool) *Filterlet {
 	return F
 }
 
+// Create a filterlet that matches if the calling Filterlet doesn't match
+//
+// The returned Filterlet and input Filterlet are the same.
+func (F *Filterlet) Not() *Filterlet {
+
+	F.Querylet = bson.D{{
+		Key:   "$not",
+		Value: F.Querylet,
+	}}
+
+	return F
+}
+
 // Add filterlet to filter. The returned filter and input filter are the same.
 func (F *Filter) Add(filedPath string, fl *Filterlet) *Filter {
 
@@ -370,5 +396,99 @@ func (F *Filter) Add(filedPath string, fl *Filterlet) *Filter {
 		Key:   "Doc." + filedPath,
 		Value: bson.D(fl.Querylet),
 	})
+	return F
+}
+
+func (F *Filter) And(filters ...*Filter) *Filter {
+
+	A := make(bson.A, len(filters)+1)
+
+	A = append(A, bson.D(F.MongoQuery))
+
+	for _, f := range filters {
+		A = append(A, bson.D(f.MongoQuery))
+	}
+
+	F.MongoQuery = bson.D{{Key: "$and", Value: A}}
+
+	return F
+}
+
+func (F *Filter) Or(filters ...*Filter) *Filter {
+
+	A := make(bson.A, len(filters)+1)
+
+	A = append(A, bson.D(F.MongoQuery))
+
+	for _, f := range filters {
+		A = append(A, bson.D(f.MongoQuery))
+	}
+
+	F.MongoQuery = bson.D{{Key: "$or", Value: A}}
+
+	return F
+}
+
+func (F *Filter) Nor(filters ...*Filter) *Filter {
+
+	A := make(bson.A, len(filters)+1)
+
+	A = append(A, bson.D(F.MongoQuery))
+
+	for _, f := range filters {
+		A = append(A, bson.D(f.MongoQuery))
+	}
+
+	F.MongoQuery = bson.D{{Key: "$or", Value: A}}
+
+	return F
+}
+
+func Filter_FromQueryStrings(Q map[string][]string) *Filter {
+	F := Filter_MatchAll()
+	for qk, qvs := range Q {
+		if len(qk) == 0 {
+			continue
+		}
+
+		fl := Filterlet_new()
+
+		ext_not := false
+
+		if len(qvs) == 0 { // key
+			fl.Exists(true)
+
+		} else {
+			for _, v := range qvs {
+				if strings.HasPrefix(v, "=") { // key==value
+					fl.Equals(v[1:])
+
+				} else if strings.HasPrefix(v, "-") { // key=-value
+					fl.NotEquals(v[1:])
+
+				} else if v == "exist" || len(v) == 0 { // key=exist | key
+					fl.Exists(true)
+
+				} else if v == "not-exist" { // key=not-exist
+					fl.Exists(false)
+
+				} else if v == "not" { // key=not
+					ext_not = true
+
+				}
+
+			}
+		}
+
+		if len(fl.Querylet) != 0 {
+
+			if ext_not {
+				fl.Not()
+			}
+
+			F.Add(qk, fl)
+		}
+
+	}
 	return F
 }

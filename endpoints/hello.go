@@ -20,6 +20,42 @@ func API_Hello(C *APICall) {
 		C.WriteString("<br> \n <h2> Let's go, Captain " + C.Params[0] + " " + C.Params[1] + "! </h2> \n <br>")
 	}
 
+	filter := moncore.Filter_MatchAll()
+
+	filter.Add("unwanted_field1", moncore.Filterlet_new().Exists(false))
+
+	filter.Add("name",
+		moncore.Filterlet_new().
+			Exists(true).
+			NotEquals("Thanos").
+			RegexMatches("^T.*"),
+	)
+
+	Documents := Moncore.Database("users").Collection("accounts").Query(filter)
+
+	C.WriteString("<h4> Documents in users/accounts without a field named 'unwanted_field1' and a field named 'name' exists which starts with 'T' but not equal to 'Thanos'  </h4> ")
+
+	C.WriteString(` <pre> 
+	filter := moncore.Filter_MatchAll()
+
+	filter.Add("unwanted_field1", moncore.Filterlet_new().Exists(false))
+
+	filter.Add("name",
+		moncore.Filterlet_new().
+			Exists(true).
+			NotEquals("Thanos").
+			RegexMatches("^T.*"),
+	)
+
+	Documents := Moncore.Database("users").Collection("accounts").Query(filter)
+	</pre> `)
+
+	C.WriteString("<h4> Output 'Documents' : </h4>")
+
+	C.WriteString("<pre>")
+	C.WriteJSONBeautified(Documents)
+	C.WriteString("</pre>")
+
 	C.HTMLEnd()
 
 }
@@ -38,45 +74,11 @@ func API_List_Collections(C *APICall) {
 
 func API_List_Documents(C *APICall) {
 
-	F := moncore.Filter_MatchAll()
-
-	Q := C.HTTPRequest.URL.Query()
+	Q := map[string][]string(C.HTTPRequest.URL.Query())
 
 	C.WriteJSONBeautified(Q)
 
-	for qk, qvs := range Q {
-		if len(qk) == 0 {
-			continue
-		}
-
-		fl := moncore.Filterlet_new()
-		if len(qvs) == 0 { // Exist
-			fl.Exists(true)
-
-		} else {
-			for _, v := range qvs {
-				if strings.HasPrefix(v, "=") {
-					fl.Equals(v[1:])
-
-				} else if strings.HasPrefix(v, "-") {
-					fl.NotEquals(v[1:])
-
-				} else if v == "exist" || len(v) == 0 {
-					fl.Exists(true)
-
-				} else if v == "not-exist" {
-					fl.Exists(false)
-
-				}
-
-			}
-		}
-
-		if len(fl.Querylet) != 0 {
-			F.Add(qk, fl)
-		}
-
-	}
+	F := moncore.Filter_FromQueryStrings(Q)
 
 	C.WriteString("\n\n")
 
